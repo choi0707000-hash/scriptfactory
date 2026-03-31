@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>스크립트팩토리 — AI 영상 대본 생성기</title>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg:#0A0A0B;--surface:#141416;--card:#1C1C1F;--card-hover:#232328;
+--text:#F5F5F3;--sub:#9A9A9E;--hint:#5A5A60;
+--accent:#FF6B35;--accent-glow:rgba(255,107,53,0.15);--accent-dark:#CC5529;
+--green:#22C55E;--green-bg:rgba(34,197,94,0.1);
+--blue:#3B82F6;--blue-bg:rgba(59,130,246,0.1);
+--purple:#A855F7;--purple-bg:rgba(168,85,247,0.1);
+--border:rgba(255,255,255,0.06);--border-hover:rgba(255,255,255,0.12);
+--radius:14px;--radius-sm:10px;
+--font:'Pretendard Variable',system-ui,-apple-system,sans-serif;
+}
+html{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;display:flex;justify-content:center}
+#app{width:100%;max-width:480px;min-height:100dvh;position:relative}
+.screen{display:none;padding:0 20px 40px;animation:fadeUp .45s cubic-bezier(.23,1,.32,1)}
+.screen.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes typewriter{from{width:0}to{width:100%}}
+@keyframes blink{50%{border-color:transparent}}
+@keyframes gradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+
+.btn{
+width:100%;padding:15px;border-radius:var(--radius-sm);font-size:16px;font-weight:600;
+cursor:pointer;border:none;font-family:var(--font);transition:all .2s;letter-spacing:-0.01em;
+}
+.btn:active{transform:scale(0.98)}
+.btn-primary{
+background:var(--accent);color:#fff;
+box-shadow:0 0 24px var(--accent-glow),0 2px 8px rgba(0,0,0,0.3);
+}
+.btn-primary:hover{background:var(--accent-dark);box-shadow:0 0 32px rgba(255,107,53,0.25)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none}
+.btn-ghost{background:transparent;color:var(--sub);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--border-hover);background:rgba(255,255,255,0.03)}
+
+.input-field{
+width:100%;padding:14px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);
+background:var(--surface);color:var(--text);font-size:14px;font-family:var(--font);
+transition:border-color .2s;resize:none;
+}
+.input-field:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.input-field::placeholder{color:var(--hint)}
+
+.chip{
+display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border-radius:20px;
+font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);
+background:var(--surface);color:var(--sub);transition:all .2s;
+}
+.chip.selected{border-color:var(--accent);background:var(--accent-glow);color:var(--accent)}
+.chip:hover{border-color:var(--border-hover)}
+
+.card{
+background:var(--card);border-radius:var(--radius);border:1px solid var(--border);
+padding:16px;transition:all .2s;cursor:pointer;
+}
+.card:hover{border-color:var(--border-hover);background:var(--card-hover)}
+.card.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+
+.script-block{
+background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);
+padding:20px;margin-bottom:12px;animation:slideIn .3s ease forwards;opacity:0;
+}
+.script-block .timestamp{
+font-size:11px;font-weight:600;color:var(--accent);letter-spacing:0.05em;
+margin-bottom:6px;font-variant-numeric:tabular-nums;
+}
+.script-block .direction{font-size:12px;color:var(--blue);margin-bottom:8px;font-style:italic}
+.script-block .narration{font-size:14px;line-height:1.8;color:var(--text)}
+.script-block .note{font-size:12px;color:var(--hint);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+
+.label{font-size:12px;font-weight:600;color:var(--sub);letter-spacing:0.03em;margin-bottom:8px;display:block}
+
+.counter{
+position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+width:100%;max-width:480px;background:linear-gradient(transparent,var(--bg) 30%);
+padding:20px 20px 24px;z-index:10;
+}
+
+.toast{
+position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);
+background:var(--card);color:var(--text);padding:12px 20px;border-radius:var(--radius-sm);
+font-size:13px;font-weight:500;opacity:0;transition:all .3s;pointer-events:none;z-index:20;
+border:1px solid var(--border);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+select.input-field{appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22><path d=%22M3 4.5L6 7.5L9 4.5%22 fill=%22none%22 stroke=%22%239A9A9E%22 stroke-width=%221.5%22/></svg>');background-repeat:no-repeat;background-position:right 14px center}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- S0: Landing -->
+  <div class="screen active" id="s0">
+    <div style="padding-top:80px;text-align:center">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-glow);border:1px solid rgba(255,107,53,0.2);padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:24px">
+        AI POWERED
+      </div>
+      <h1 style="font-size:32px;font-weight:800;letter-spacing:-0.04em;line-height:1.2;margin-bottom:12px">
+        영상 대본,<br><span style="background:linear-gradient(135deg,var(--accent),#FF9F6B);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-size:200% 200%;animation:gradient 3s ease infinite">30초면 완성</span>
+      </h1>
+      <p style="font-size:15px;color:var(--sub);line-height:1.6;margin-bottom:40px">
+        주제만 입력하면 방송 작가 수준의<br>영상 대본이 자동으로 생성됩니다
+      </p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:32px">
+      <div style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">
+        <div style="width:40px;height:40px;border-radius:10px;background:rgba(255,107,53,0.1);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🎬</div>
+        <div>
+          <p style="font-size:14px;font-weight:600">유튜브 · 릴스 · 숏폼</p>
+          <p style="font-size:12px;color:var(--sub);margin-top:2px">모든 영상 포맷 지원</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">
+        <div style="width:40px;height:40px;border-radius:10px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">✍️</div>
+        <div>
+          <p style="font-size:14px;font-weight:600">방송 작가 프롬프트 엔진</p>
+          <p style="font-size:12px;color:var(--sub);margin-top:2px">현업 방송 구성 노하우 내장</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border)">
+        <div style="width:40px;height:40px;border-radius:10px;background:var(--purple-bg);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⚡</div>
+        <div>
+          <p style="font-size:14px;font-weight:600">타임코드 + 연출 지시 포함</p>
+          <p style="font-size:12px;color:var(--sub);margin-top:2px">촬영 현장에서 바로 사용</p>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="goTo(1)">무료로 대본 만들기 →</button>
+    <p style="text-align:center;font-size:11px;color:var(--hint);margin-top:12px">무료 3회 · 회원가입 없음</p>
+  </div>
+
+  <!-- S1: Script Generator -->
+  <div class="screen" id="s1">
+    <div style="padding-top:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+        <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.03em">새 대본 만들기</h2>
+        <span style="font-size:12px;color:var(--hint)" id="creditDisplay">무료 3/3 남음</span>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label class="label">영상 주제 *</label>
+        <textarea class="input-field" id="topicInput" rows="3" placeholder="예: 직장인이 퇴근 후 월 100만원 부수입 만드는 현실적인 방법 5가지" maxlength="200"></textarea>
+        <p style="font-size:11px;color:var(--hint);margin-top:4px;text-align:right"><span id="charCount">0</span>/200</p>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label class="label">영상 유형</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="typeChips">
+          <div class="chip selected" onclick="selectChip(this,'typeChips')">유튜브 롱폼</div>
+          <div class="chip" onclick="selectChip(this,'typeChips')">유튜브 쇼츠</div>
+          <div class="chip" onclick="selectChip(this,'typeChips')">인스타 릴스</div>
+          <div class="chip" onclick="selectChip(this,'typeChips')">틱톡</div>
+          <div class="chip" onclick="selectChip(this,'typeChips')">뉴스/정보</div>
+          <div class="chip" onclick="selectChip(this,'typeChips')">브이로그</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label class="label">톤 & 분위기</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="toneChips">
+          <div class="chip selected" onclick="selectChip(this,'toneChips')">전문적·신뢰감</div>
+          <div class="chip" onclick="selectChip(this,'toneChips')">캐주얼·친근</div>
+          <div class="chip" onclick="selectChip(this,'toneChips')">유머·재미</div>
+          <div class="chip" onclick="selectChip(this,'toneChips')">감성·스토리</div>
+          <div class="chip" onclick="selectChip(this,'toneChips')">자극적·후킹</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div>
+          <label class="label">영상 길이</label>
+          <select class="input-field" id="durationSelect">
+            <option value="30초">30초 (숏폼)</option>
+            <option value="1분">1분</option>
+            <option value="3분">3분</option>
+            <option value="5분">5분</option>
+            <option value="10분" selected>10분</option>
+            <option value="15분">15분+</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">타겟 시청자</label>
+          <select class="input-field" id="audienceSelect">
+            <option value="일반 대중">일반 대중</option>
+            <option value="20대 직장인" selected>20대 직장인</option>
+            <option value="30-40대 부모">30-40대 부모</option>
+            <option value="자영업자">자영업자</option>
+            <option value="학생">학생</option>
+            <option value="시니어">시니어</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label class="label">추가 요청사항 (선택)</label>
+        <textarea class="input-field" id="extraInput" rows="2" placeholder="예: 실제 사례 포함, CTA 강조, 자막 친화적으로"></textarea>
+      </div>
+
+      <div style="height:80px"></div>
+
+      <div class="counter">
+        <button class="btn btn-primary" id="generateBtn" onclick="generateScript()">
+          ⚡ 대본 생성하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2: Loading -->
+  <div class="screen" id="s2">
+    <div style="padding-top:100px;text-align:center">
+      <div style="width:56px;height:56px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;margin:0 auto 24px;animation:spin .7s linear infinite"></div>
+      <p style="font-size:17px;font-weight:600;margin-bottom:8px" id="loadingTitle">대본 구성 중...</p>
+      <p style="font-size:13px;color:var(--sub)" id="loadingStep">도입부 후킹 포인트 설계</p>
+      <div style="margin-top:32px;display:flex;flex-direction:column;gap:12px;padding:0 20px">
+        <div style="display:flex;align-items:center;gap:10px" id="step1">
+          <div style="width:20px;height:20px;border-radius:50%;border:2px solid var(--accent);display:flex;align-items:center;justify-content:center">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite"></div>
+          </div>
+          <span style="font-size:13px;color:var(--accent)">도입부 후킹 포인트 설계</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px" id="step2">
+          <div style="width:20px;height:20px;border-radius:50%;border:2px solid var(--hint)"></div>
+          <span style="font-size:13px;color:var(--hint)">본론 구조 및 전환점 배치</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px" id="step3">
+          <div style="width:20px;height:20px;border-radius:50%;border:2px solid var(--hint)"></div>
+          <span style="font-size:13px;color:var(--hint)">연출 지시 및 타임코드 생성</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px" id="step4">
+          <div style="width:20px;height:20px;border-radius:50%;border:2px solid var(--hint)"></div>
+          <span style="font-size:13px;color:var(--hint)">최종 검수 및 포맷팅</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3: Result -->
+  <div class="screen" id="s3">
+    <div style="padding-top:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <button onclick="goTo(1)" style="background:none;border:none;color:var(--sub);font-size:14px;cursor:pointer;padding:4px;font-family:var(--font)">← 새 대본</button>
+        <div style="display:flex;gap:8px">
+          <button onclick="copyScript()" style="background:var(--card);border:1px solid var(--border);color:var(--text);font-size:12px;padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font);font-weight:500">복사</button>
+        </div>
+      </div>
+
+      <div style="background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:16px;margin-bottom:16px">
+        <p style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:4px" id="resultType">유튜브 롱폼 · 10분</p>
+        <h3 style="font-size:18px;font-weight:700;letter-spacing:-0.02em;line-height:1.4" id="resultTitle"></h3>
+        <div style="display:flex;gap:16px;margin-top:12px">
+          <div style="text-align:center">
+            <p style="font-size:16px;font-weight:700;color:var(--accent)" id="resultWordCount">0</p>
+            <p style="font-size:11px;color:var(--hint)">글자수</p>
+          </div>
+          <div style="text-align:center">
+            <p style="font-size:16px;font-weight:700;color:var(--blue)" id="resultSections">0</p>
+            <p style="font-size:11px;color:var(--hint)">구간</p>
+          </div>
+          <div style="text-align:center">
+            <p style="font-size:16px;font-weight:700;color:var(--green)" id="resultDuration">0분</p>
+            <p style="font-size:11px;color:var(--hint)">예상 길이</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="scriptOutput"></div>
+
+      <div style="height:20px"></div>
+
+      <div style="background:var(--card);border-radius:var(--radius);border:1px solid rgba(255,107,53,0.2);padding:16px;margin-bottom:20px" id="paywallBox" style="display:none">
+        <p style="font-size:14px;font-weight:600;margin-bottom:4px">더 많은 대본이 필요하신가요?</p>
+        <p style="font-size:12px;color:var(--sub);margin-bottom:12px">프로 플랜으로 무제한 대본 생성 + 프리미엄 템플릿</p>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div style="flex:1;background:var(--surface);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border)">
+            <p style="font-size:11px;color:var(--sub)">월간</p>
+            <p style="font-size:18px;font-weight:700;margin:2px 0">9,900원</p>
+          </div>
+          <div style="flex:1;background:var(--surface);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--accent);position:relative">
+            <span style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;border-radius:10px">50% 할인</span>
+            <p style="font-size:11px;color:var(--sub)">연간</p>
+            <p style="font-size:18px;font-weight:700;margin:2px 0">59,000원</p>
+            <p style="font-size:11px;color:var(--accent)">월 4,917원</p>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="font-size:14px;padding:12px">프로 플랜 시작하기</button>
+      </div>
+
+      <button class="btn btn-ghost" onclick="goTo(1)" style="margin-bottom:40px">+ 새 대본 만들기</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+let credits = 3;
+let currentScript = '';
+
+const topicInput = document.getElementById('topicInput');
+const charCount = document.getElementById('charCount');
+
+topicInput.addEventListener('input', () => {
+  charCount.textContent = topicInput.value.length;
+});
+
+function goTo(n) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s'+n).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function selectChip(el, groupId) {
+  document.getElementById(groupId).querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function getSelected(groupId) {
+  const sel = document.getElementById(groupId).querySelector('.chip.selected');
+  return sel ? sel.textContent.trim() : '';
+}
+
+const loadingSteps = [
+  {id:'step1', text:'도입부 후킹 포인트 설계', delay:0},
+  {id:'step2', text:'본론 구조 및 전환점 배치', delay:1500},
+  {id:'step3', text:'연출 지시 및 타임코드 생성', delay:3000},
+  {id:'step4', text:'최종 검수 및 포맷팅', delay:4500}
+];
+
+function resetLoadingSteps() {
+  loadingSteps.forEach(function(step) {
+    var el = document.getElementById(step.id);
+    var d = el.querySelector('div');
+    d.style.borderColor = 'var(--hint)';
+    d.innerHTML = '';
+    el.querySelector('span').style.color = 'var(--hint)';
+  });
+  document.getElementById('loadingTitle').textContent = '대본 구성 중...';
+}
+
+function animateLoading() {
+  loadingSteps.forEach(function(step, i) {
+    setTimeout(function() {
+      document.getElementById('loadingStep').textContent = step.text;
+      var el = document.getElementById(step.id);
+      el.querySelector('div').style.borderColor = 'var(--accent)';
+      el.querySelector('div').innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite"></div>';
+      el.querySelector('span').style.color = 'var(--accent)';
+      if (i > 0) {
+        var prev = document.getElementById(loadingSteps[i-1].id);
+        prev.querySelector('div').innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6L5 8.5L9.5 3.5" stroke="#22C55E" stroke-width="1.5" fill="none"/></svg>';
+        prev.querySelector('div').style.borderColor = 'var(--green)';
+        prev.querySelector('span').style.color = 'var(--green)';
+      }
+    }, step.delay);
+  });
+  setTimeout(function() {
+    var last = document.getElementById('step4');
+    last.querySelector('div').innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6L5 8.5L9.5 3.5" stroke="#22C55E" stroke-width="1.5" fill="none"/></svg>';
+    last.querySelector('div').style.borderColor = 'var(--green)';
+    last.querySelector('span').style.color = 'var(--green)';
+    document.getElementById('loadingTitle').textContent = '완료!';
+    document.getElementById('loadingStep').textContent = '대본을 불러오는 중...';
+  }, 5000);
+}
+
+function generateScript() {
+  var topic = topicInput.value.trim();
+  if (!topic) { showToast('영상 주제를 입력해주세요'); return; }
+  if (credits <= 0) { showToast('무료 횟수를 모두 사용했습니다'); return; }
+
+  var type = getSelected('typeChips');
+  var tone = getSelected('toneChips');
+  var duration = document.getElementById('durationSelect').value;
+  var audience = document.getElementById('audienceSelect').value;
+  var isShort = (duration === '30초' || duration === '1분');
+
+  goTo(2);
+  resetLoadingSteps();
+  animateLoading();
+
+  setTimeout(function() {
+    credits--;
+    document.getElementById('creditDisplay').textContent = credits > 0 ? '무료 ' + credits + '/3 남음' : '무료 소진';
+    buildScript(topic, type, duration, tone, audience, isShort);
+  }, 5500);
+}
+
+function buildScript(topic, type, duration, tone, audience, isShort) {
+  var script;
+  if (isShort) {
+    script = {
+      title: topic + ' — 당신이 몰랐던 진실',
+      sections: [
+        { timestamp:'0:00', label:'후킹', direction:'얼굴 클로즈업 + 자막 팝업 "잠깐!" + 효과음', narration:'잠깐, ' + topic + '? 이거 아직도 모르시면 진짜 손해입니다.', note:'첫 1초가 승부. 자막은 화면 중앙 크게' },
+        { timestamp:'0:05', label:'핵심 전달', direction:'B롤 전환 + 자막 순차 등장 + BGM 텐션 업', narration:'핵심만 말씀드릴게요. 첫째, 대부분의 사람들이 이걸 간과합니다. 둘째, 이 방법을 쓰면 결과가 확 달라집니다. 셋째, 지금 바로 시작할 수 있어요.', note:'3가지 포인트를 자막으로 1-2-3 넘버링' },
+        { timestamp:'0:25', label:'CTA', direction:'얼굴 컷백 + 팔로우 애니메이션', narration:'더 자세한 방법이 궁금하면 팔로우하고 다음 영상 기다려주세요!', note:'5초 안에 마무리. 팔로우 버튼 강조' }
+      ]
+    };
+  } else {
+    script = {
+      title: topic + ' — 이 영상 하나로 완벽 정리',
+      sections: [
+        { timestamp:'0:00', label:'도입-후킹', direction:'클로즈업 + 자막 강조 + 효과음 "띵!" + 긴장감 BGM', narration:'여러분, 오늘 이 영상 하나면 "' + topic + '"에 대해 더 이상 검색할 필요가 없습니다. 진짜 핵심만 정리해드릴 테니까요. 끝까지 보시면 다른 사람들은 모르는 실전 팁까지 알려드리겠습니다.', note:'첫 3초에 핵심 키워드 자막 삽입. "끝까지 보시면" 멘트로 시청 유지' },
+        { timestamp:'0:20', label:'문제 제기', direction:'화면 전환 — 통계 그래프 or 뉴스 캡처 B롤 + BGM 전환', narration:'사실 이 주제에 대해 인터넷에 정보가 넘쳐나지만, 대부분이 핵심을 놓치고 있습니다. 실제로 확인해보니 정말 놀라운 사실이 있었는데요. 지금부터 하나씩 풀어드리겠습니다.', note:'데이터나 수치를 시각화해서 보여주면 신뢰도 상승' },
+        { timestamp:'1:30', label:'핵심 내용 1', direction:'화면 분할 + 비교 자막 + 포인팅 제스처', narration:'첫 번째, 가장 중요한 포인트입니다. ' + topic + '에서 대부분의 사람들이 놓치는 게 바로 이건데요. 저도 처음에는 몰랐는데, 직접 해보니까 확실히 차이가 나더라고요. 이 방법을 적용하기 전과 후가 완전히 달랐습니다.', note:'비포/애프터 비교 화면이나 구체적 사례 삽입 구간' },
+        { timestamp:'3:30', label:'핵심 내용 2', direction:'자막 강조 컷 + 음악 톤 체인지 + 화이트보드 설명', narration:'두 번째는 사실 더 중요합니다. 첫 번째 것만 알면 반쪽짜리거든요. 이걸 같이 알아야 시너지가 나요. 많은 분들이 여기서 실수하시는데, 핵심은 순서입니다. 반드시 이 순서대로 하셔야 효과가 있어요.', note:'"이게 더 중요합니다" 자막으로 시청자 집중도 재점화' },
+        { timestamp:'5:30', label:'중간 CTA + 전환', direction:'자연스러운 톤 전환 + 구독 버튼 그래픽 삽입', narration:'여기까지 도움이 되셨다면 구독과 좋아요 한번 부탁드릴게요. 저는 이런 실전 정보를 매주 올려드리고 있거든요. 자, 이제 진짜 핵심 중의 핵심을 말씀드리겠습니다.', note:'CTA는 자연스럽게. "자, 이제 진짜"로 다음 내용 호기심 유발' },
+        { timestamp:'6:00', label:'심화-차별화 포인트', direction:'화면 전환 — 실제 사례 + BGM 볼륨 다운', narration:'자, 여기서부터가 다른 영상에서는 안 알려주는 부분입니다. ' + audience + ' 분들이 특히 주목하셔야 하는데요. 제가 직접 테스트해본 결과, 이 방법이 가장 효과적이었습니다.', note:'영상의 핵심 차별화 구간. 퀄리티를 가장 높여야 할 부분' },
+        { timestamp:'8:00', label:'실전 적용법', direction:'스텝바이스텝 자막 + 넘버링 그래픽', narration:'실제로 적용하는 방법을 정리해드릴게요. 1단계, 먼저 이것부터 준비하세요. 2단계, 준비가 되면 바로 실행합니다. 3단계, 결과를 확인하고 조정하면 됩니다. 정말 이게 전부예요.', note:'명확한 1-2-3 스텝. 각 스텝별 자막 그래픽 필수' },
+        { timestamp:'9:00', label:'결론 + 마무리 CTA', direction:'얼굴 클로즈업 + BGM 페이드아웃 + 따뜻한 톤', narration:'오늘 핵심을 한 줄로 정리하면 이겁니다. "' + topic + '"의 핵심은 결국 실행력입니다. 오늘 알려드린 방법 중 하나라도 바로 시작해보세요. 다음 영상에서는 더 구체적인 사례를 가져오겠습니다. 댓글로 궁금한 점 남겨주세요!', note:'종료 화면 5초 + 다음 영상 예고 카드 삽입' }
+      ]
+    };
+  }
+  renderScript(script, type, duration);
+}
+
+function renderScript(script, type, duration) {
+  document.getElementById('resultTitle').textContent = script.title;
+  document.getElementById('resultType').textContent = type + ' \u00B7 ' + duration;
+  document.getElementById('resultSections').textContent = script.sections.length;
+  document.getElementById('resultDuration').textContent = duration;
+
+  var totalChars = 0;
+  script.sections.forEach(function(s) { totalChars += (s.narration || '').length; });
+  document.getElementById('resultWordCount').textContent = totalChars.toLocaleString();
+
+  var output = document.getElementById('scriptOutput');
+  output.innerHTML = '';
+  currentScript = '';
+
+  script.sections.forEach(function(section, i) {
+    var block = document.createElement('div');
+    block.className = 'script-block';
+    block.style.animationDelay = (i * 0.1) + 's';
+
+    var html = '';
+    if (section.timestamp) html += '<div class="timestamp">' + section.timestamp + (section.label ? ' \u2014 ' + section.label : '') + '</div>';
+    if (section.direction) html += '<div class="direction">[' + section.direction + ']</div>';
+    if (section.narration) html += '<div class="narration">' + section.narration + '</div>';
+    if (section.note) html += '<div class="note">\uD83D\uDCDD ' + section.note + '</div>';
+
+    block.innerHTML = html;
+    output.appendChild(block);
+
+    currentScript += '[' + (section.timestamp || '') + (section.label ? ' \u2014 ' + section.label : '') + ']\n';
+    if (section.direction) currentScript += '\uC5F0\uCD9C: ' + section.direction + '\n';
+    if (section.narration) currentScript += section.narration + '\n';
+    if (section.note) currentScript += '\uCC38\uACE0: ' + section.note + '\n';
+    currentScript += '\n';
+  });
+
+  if (credits <= 0) {
+    document.getElementById('paywallBox').style.display = 'block';
+  }
+  goTo(3);
+}
+
+function copyScript() {
+  navigator.clipboard.writeText(currentScript).then(function() {
+    showToast('대본이 복사되었습니다!');
+  }).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = currentScript;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('대본이 복사되었습니다!');
+  });
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+</script>
+</body>
+</html>
