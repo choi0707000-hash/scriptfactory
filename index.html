@@ -388,17 +388,31 @@ function generateScript() {
   var tone = getSelected('toneChips');
   var duration = document.getElementById('durationSelect').value;
   var audience = document.getElementById('audienceSelect').value;
+  var extra = document.getElementById('extraInput').value.trim();
   var isShort = (duration === '30초' || duration === '1분');
 
   goTo(2);
   resetLoadingSteps();
   animateLoading();
 
-  setTimeout(function() {
+  fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic: topic, type: type, tone: tone, duration: duration, audience: audience, extra: extra })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(script) {
+    if (script.error) { throw new Error(script.error); }
+    credits--;
+    document.getElementById('creditDisplay').textContent = credits > 0 ? '무료 ' + credits + '/3 남음' : '무료 소진';
+    renderScript(script, type, duration);
+  })
+  .catch(function(err) {
+    console.log('API fallback:', err.message);
     credits--;
     document.getElementById('creditDisplay').textContent = credits > 0 ? '무료 ' + credits + '/3 남음' : '무료 소진';
     buildScript(topic, type, duration, tone, audience, isShort);
-  }, 5500);
+  });
 }
 
 function buildScript(topic, type, duration, tone, audience, isShort) {
